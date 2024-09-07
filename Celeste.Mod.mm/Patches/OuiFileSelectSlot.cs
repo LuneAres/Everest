@@ -7,6 +7,7 @@ using Celeste.Mod.Core;
 using Celeste.Mod.UI;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
+using Microsoft.Xna.Framework.Graphics;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Monocle;
@@ -18,6 +19,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using static Monocle.Ease;
+using Celeste;
 
 namespace Celeste {
     public class patch_OuiFileSelectSlot : OuiFileSelectSlot {
@@ -38,6 +41,7 @@ namespace Celeste {
         private float selectedEase;
         private float newgameFade;
         private Wiggler wiggler;
+        private float highlightEase;
 
         [MonoModIgnore]
         private bool selected { get; set; }
@@ -62,13 +66,61 @@ namespace Celeste {
         private bool renamed;
 
         private bool Golden => !Corrupted && Exists && SaveData.TotalStrawberries >= maxStrawberryCountIncludingUntracked;
+        
+        private bool showingSessionDetails {
+            get {
+                if (((patch_OuiFileSelect) fileSelect).ShowingSessionDetails) {
+                    return fileSelect.SlotIndex == FileSlot;
+                }
+                return false;
+            }
+        }
+
+        private float sessionDetailsEase {
+            get {
+                return ((patch_OuiFileSelect) fileSelect).SessionDetailsEase;
+            }
+        }
+
+        private bool highlighted {
+            [MonoModReplace]
+            get {
+                if (sessionDetailsEase > 0f)
+                    return false;
+                else
+                    return fileSelect.SlotIndex == FileSlot;
+            }
+        }
 
         // vanilla: new Vector2(960f, 540 + 310 * (FileSlot - 1)); => slot 1 is centered at all times
         // if there are 6 slots (0-based): slot 1 should be centered if slot 0 is selected; slot 4 should be centered if slot 5 is selected; the selected slot should be centered otherwise.
         // this formula doesn't change the behavior with 3 slots, since the slot index will be clamped between 1 and 1.
         public new Vector2 IdlePosition {
             [MonoModReplace]
-            get => new Vector2(960f, 540 + 310 * (FileSlot - Calc.Clamp(fileSelect.SlotIndex, 1, fileSelect.Slots.Length - 2)));
+            get {
+                float posX = 960f;
+
+                if (((patch_OuiFileSelect) fileSelect).ShowingSessionDetails) {
+                    // move the slots to the right (with an offset if it's the slot we're hovering)
+                    posX = (fileSelect.SlotIndex == FileSlot) ? 500f : 440f;
+                }
+
+                return new Vector2(posX, 540 + 310 * (FileSlot - Calc.Clamp(fileSelect.SlotIndex, 1, fileSelect.Slots.Length - 2)));
+            }
+        }
+
+        private Vector2 ticketRenderPosition {
+            get {
+
+                float posX = Position.X + Ease.CubeInOut(highlightEase) * 360f;
+                float posY = Position.Y;
+                if (fileSelect.SlotIndex == FileSlot) {
+                    posX += (1400 - (Position.X + Ease.CubeInOut(highlightEase) * 360f)) * Ease.CubeInOut(Math.Clamp(4 * sessionDetailsEase, 1, 2) - 1);
+                    posY += (200 - Position.Y) * Ease.CubeInOut(Math.Clamp(4 * sessionDetailsEase, 2, 3) - 2);
+                }
+
+                return new Vector2(posX, posY);
+            }
         }
 
         public patch_OuiFileSelectSlot(int index, OuiFileSelect fileSelect, SaveData data)
@@ -209,6 +261,10 @@ namespace Celeste {
         public override void Update() {
             orig_Update();
 
+            if (showingSessionDetails) {
+                Depth = -20; // put it above the other slots (Depth = 0 or -10) to render a black trasparent layer
+            }
+
             if (newGameLevelSetPicker != null && selected && fileSelect.Selected && fileSelect.Focused &&
                 !StartingGame && tween == null && inputDelay <= 0f && !StartingGame && !deleting) {
 
@@ -282,6 +338,11 @@ namespace Celeste {
         [PatchFileSelectSlotRender] // manually manipulate the method via MonoModRules
         public extern void orig_Render();
         public override void Render() {
+            if (showingSessionDetails) {
+                // drawing a trasparent black rectangle above the other slots (since Depth = -20 when hovered, -10 when highlighted, and and 0 when nothing) and below the session details (Depth=-30)
+                Draw.Rect(-10f, -10f, 1940f, 1100f, Color.Black * (float) Ease.CubeInOut(sessionDetailsEase) * 0.6f);
+            }
+
             orig_Render();
 
             if (selectedEase > 0f) {
@@ -326,6 +387,8 @@ namespace MonoMod {
     /// <summary>
     /// IL-patch the Render method for file select slots instead of reimplementing it,
     /// to un-hardcode stamps.
+    /// Added: Also un-hardcode the ticket render position (used to show save details)
+    /// Added: replace a `highlightEase > 0f` by `(highlightEase > 0f || fileSelect.SessionDetailsEase > 0f)`
     /// </summary>
     [MonoModCustomMethodAttribute(nameof(MonoModRules.PatchFileSelectSlotRender))]
     class PatchFileSelectSlotRenderAttribute : Attribute { }
@@ -352,6 +415,38 @@ namespace MonoMod {
             FieldDefinition f_totalCassettes = declaringType.FindField("totalCassettes");
 
             ILCursor cursor = new ILCursor(context);
+
+            // unhardcode the ticket RenderPosition and replace it with a field reference 
+            cursor.GotoNext(MoveType.Before, instr => instr.MatchCallvirt("Monocle.GraphicsComponent", "set_RenderPosition"));
+            cursor.Index -= 11;
+            // remove the ticket position calculation(everything between the first `this` and the `stloc`)
+            cursor.RemoveRange(7);
+            // replace with `this.ticketRenderPosition`
+            cursor.Emit(OpCodes.Callvirt, declaringType.FindMethod("get_ticketRenderPosition"));
+
+            // replace `highlightEase > 0f` by `(highlightEase > 0f || fileSelect.SessionDetailsEase > 0f)`
+            ILLabel endIfLabel = default;
+            ILLabel endOrLabel = default;
+            cursor.GotoNext(MoveType.After,
+                instr => instr.MatchLdfld(declaringType.FullName, "highlightEase"),
+                instr => instr.MatchLdcR4(0f),
+                instr => instr.MatchBleUn(out endIfLabel)
+            );
+            cursor.Index--;
+            cursor.Remove(); // will be replaced by a jump to after the second part of the OR if highlightEase > 0f
+            // emit the second part of the OR
+            cursor.Emit(OpCodes.Ldarg_0);
+            cursor.Emit(OpCodes.Ldfld, declaringType.FindField("fileSelect"));
+            cursor.Emit(OpCodes.Ldfld, ((TypeDefinition) declaringType.FindField("fileSelect").FieldType).FindField("SessionDetailsEase"));
+            cursor.Emit(OpCodes.Ldc_R4, 0f);
+            cursor.Emit(OpCodes.Ble_Un, endIfLabel);
+            /*cursor.Emit(OpCodes.Ldfld, declaringType.FindField("showingDetails"));
+            cursor.Emit(OpCodes.Brfalse, endIfLabel);*/
+            // retrieve the label and go back to put the OR jump
+            endOrLabel = cursor.MarkLabel();
+            cursor.Index -= 5;
+            cursor.Emit(OpCodes.Bgt, endOrLabel);
+
             // SaveData.TotalStrawberries replaced by SaveData.TotalStrawberries_Safe with MonoModLinkFrom
             // Replace hardcoded ARB value with a field reference
             cursor.GotoNext(MoveType.After, instr => instr.MatchLdcI4(175));

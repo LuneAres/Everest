@@ -44,6 +44,14 @@
 	MENU_MODOPTIONS_MOD_UPDATE_AVAILABLE=		An update is available for 1 mod
 	MENU_MODOPTIONS_MOD_UPDATES_AVAILABLE=		Updates are available for {0} mods
 
+# File selection
+	FILESELECT_SESSIONDETAILS_TOGGLE=				Session details
+	FILESELECT_SESSIONDETAILS_NOCURRENTSESSION=		There is no ongoing session
+	FILESELECT_SESSIONDETAILS_MAPUNAVAILABLE=		The map is unavailable
+	FILESELECT_SESSIONDETAILS_ONGOINGSESSION=		Ongoing session
+	FILESELECT_SESSIONDETAILS_FIRSTPLAYTHROUGH=		First playthrough
+	FILESELECT_SESSIONDETAILS_FROMBEGINNING=		Started from the beginning of the map
+
 # Title Screen
 	MENU_TITLESCREEN_RESTART_VANILLA= Restarting into orig/Celeste.exe
 	MENU_TITLESCREEN_RESTART_VANILLA_SAVES_WARN= WARNING: Because of OS limitations, saves won't be shared!
