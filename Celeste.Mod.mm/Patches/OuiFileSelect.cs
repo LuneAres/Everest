@@ -256,12 +256,12 @@ namespace Celeste {
         private MTexture titleTexture;
         private MTexture accentTexture;
         private string areaName;
-        private string chapter;
+        private string chapterString;
         private Color titleBaseColor;
         private Color titleAccentColor;
         private Color titleTextColor;
         private MTexture areaIcon;
-        private MTexture tab = GFX.Gui["areaselect/tab"];
+        private MTexture tab;
         private Color tabColor = Calc.HexToColor("3c6180");
         private MTexture modeIcon;
         private string modeString = ""; // An empty string will result in no mode shown (use a space to show only the modeIcon)
@@ -346,17 +346,18 @@ namespace Celeste {
             deaths.Wiggle();
             deaths.Visible = true;
 
+            string modeIconName; // used later to retrieve the texture (a potentially custom one if the map exists)
             switch (session.Area.Mode) {
                 case AreaMode.BSide:
-                    modeIcon = GFX.Gui["menu/remix"];
+                    modeIconName = "remix";
                     modeString = Dialog.Clean("overworld_remix");
                     break;
                 case AreaMode.CSide:
-                    modeIcon = GFX.Gui["menu/rmx2"];
+                    modeIconName = "rmx2";
                     modeString = Dialog.Clean("overworld_remix2");
                     break;
                 default:
-                    //modeIcon = GFX.Gui["menu/play"];
+                    modeIconName = "play";
                     modeString = ""; // So the "mode" tab isn't displayed if on the A-Side
                     break;
             }
@@ -375,8 +376,9 @@ namespace Celeste {
                 titleTextColor = areadata.TitleTextColor;
 
                 areaName = Dialog.Clean(areadata.Name);
-                chapter = Dialog.Get("area_chapter").Replace("{x}", session.Area.ChapterIndex.ToString().PadLeft(2));
+                chapterString = Dialog.Get("area_chapter").Replace("{x}", session.Area.ChapterIndex.ToString().PadLeft(2)); // TODO: I think I read about a way of customizing the chapter string, if that's the case, I need to make it compatible
 
+                // compatibility with custom area title textures
                 string areaTextureName = $"areaselect/{areadata.Name}_title";
                 string levelSetTextureName = $"areaselect/{savedata.LevelSet ?? "Celeste"}/title";
                 if (GFX.Gui.Has(areaTextureName)) {
@@ -386,8 +388,10 @@ namespace Celeste {
                 } else {
                     titleTexture = GFX.Gui["areaselect/title"];
                 }
+
+                // compatibility with custom area accent textures
                 areaTextureName = $"areaselect/{areadata.Name}_accent";
-                areaTextureName = $"areaselect/{savedata.LevelSet ?? "Celeste"}/accent";
+                levelSetTextureName = $"areaselect/{savedata.LevelSet ?? "Celeste"}/accent";
                 if (GFX.Gui.Has(areaTextureName)) {
                     accentTexture = GFX.Gui[areaTextureName];
                 } else if (GFX.Gui.Has(levelSetTextureName)) {
@@ -396,35 +400,41 @@ namespace Celeste {
                     accentTexture = GFX.Gui["areaselect/accent"];
                 }
 
-                areaTextureName = $"areaselect/{areadata.Name}_accent";
-                areaTextureName = $"areaselect/{savedata.LevelSet ?? "Celeste"}/accent";
+                // compatibility with custom area tab textures
+                areaTextureName = $"areaselect/{areadata.Name}_tab";
+                levelSetTextureName = $"areaselect/{savedata.LevelSet ?? "Celeste"}/tab";
                 if (GFX.Gui.Has(areaTextureName)) {
-                    accentTexture = GFX.Gui[areaTextureName];
+                    tab = GFX.Gui[areaTextureName];
                 } else if (GFX.Gui.Has(levelSetTextureName)) {
-                    accentTexture = GFX.Gui[levelSetTextureName];
+                    tab = GFX.Gui[levelSetTextureName];
                 } else {
-                    accentTexture = GFX.Gui["areaselect/accent"];
+                    tab = GFX.Gui["areaselect/tab"];
                 }
-                areaTextureName = $"areaselect/{areadata.Name}_accent";
-                areaTextureName = $"areaselect/{savedata.LevelSet ?? "Celeste"}/accent";
+
+                // compatibility with custom mode icons
+                areaTextureName = $"menu/{areadata.Name}_{modeIconName}";
+                levelSetTextureName = $"menu/{savedata.LevelSet ?? "Celeste"}/{modeIconName}";
                 if (GFX.Gui.Has(areaTextureName)) {
-                    accentTexture = GFX.Gui[areaTextureName];
+                    modeIcon = GFX.Gui[areaTextureName];
                 } else if (GFX.Gui.Has(levelSetTextureName)) {
-                    accentTexture = GFX.Gui[levelSetTextureName];
+                    modeIcon = GFX.Gui[levelSetTextureName];
                 } else {
-                    accentTexture = GFX.Gui["areaselect/accent"];
+                    modeIcon = GFX.Gui[$"menu/{modeIconName}"];
                 }
+
                 areaIcon = GFX.Gui[areadata.Icon];
             } else {
                 titleBaseColor = Color.White;
                 titleAccentColor = Color.Gray;
                 titleTextColor = Color.Black;
 
-                areaName = session.Area.GetSID(); // TODO: create a mod to cache map name dialogs?
-                chapter = Dialog.Clean("FILESELECT_SESSIONDETAILS_MAPUNAVAILABLE");
+                areaName = session.Area.GetSID();
+                chapterString = Dialog.Clean("FILESELECT_SESSIONDETAILS_MAPUNAVAILABLE");
                 titleTexture = GFX.Gui["areaselect/title"];
                 accentTexture = GFX.Gui["areaselect/accent"];
-                areaIcon = GFX.Gui["areas/new"]; // TODO: create a mod to cache map icons?
+                areaIcon = GFX.Gui["areas/new"];
+                tab = GFX.Gui["areaselect/tab"];
+                modeIcon = GFX.Gui[$"menu/{modeIconName}"];
             }
         }
 
@@ -583,7 +593,7 @@ namespace Celeste {
 
                 float x = Math.Max(
                     ActiveFont.Measure(areaName).X * ((mapExists) ? 1f : 0.8f),
-                    ActiveFont.Measure(chapter).X * ((mapExists) ? 0.8f : 1f)
+                    ActiveFont.Measure(chapterString).X * ((mapExists) ? 0.8f : 1f)
                 );
                 x = Math.Clamp(x - 570f, -20f, 80f);
                 Vector2 titleBannerPos = Position + bannerPosShift + new Vector2(-x, 0);
@@ -595,10 +605,10 @@ namespace Celeste {
                 areaIcon.DrawCentered(areaIconPos, Color.White, Vector2.One * scale);
 
                 if (mapExists) {
-                    ActiveFont.Draw(chapter, areaIconPos + new Vector2(-100f, -2f), new Vector2(1f, 1f), Vector2.One * 0.6f, titleAccentColor * 0.8f);
+                    ActiveFont.Draw(chapterString, areaIconPos + new Vector2(-100f, -2f), new Vector2(1f, 1f), Vector2.One * 0.6f, titleAccentColor * 0.8f);
                     ActiveFont.Draw(areaName, areaIconPos + new Vector2(-100f, -18f), new Vector2(1f, 0f), Vector2.One, titleTextColor * 0.8f);
                 } else {
-                    ActiveFont.Draw(chapter, areaIconPos + new Vector2(-100f, 18f), new Vector2(1f, 1f), Vector2.One, titleTextColor * 0.8f);
+                    ActiveFont.Draw(chapterString, areaIconPos + new Vector2(-100f, 18f), new Vector2(1f, 1f), Vector2.One, titleTextColor * 0.8f);
                     ActiveFont.Draw(areaName, areaIconPos + new Vector2(-100f, 2f), new Vector2(1f, 0f), Vector2.One * 0.6f, titleAccentColor * 0.8f);
                 }
 

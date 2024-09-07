@@ -25,6 +25,13 @@
 	MENU_MODOPTIONS_UPDATE_AVAILABLE=			Une mise à jour d'Everest est disponible
 	MENU_MODOPTIONS_MOD_UPDATE_AVAILABLE=		Mise à jour disponible pour 1 mod
 	MENU_MODOPTIONS_MOD_UPDATES_AVAILABLE=		Mises à jour disponibles pour {0} mods
+
+# File selection
+	FILESELECT_SESSIONDETAILS_TOGGLE=				Session en cours
+	FILESELECT_SESSIONDETAILS_NOCURRENTSESSION=		Aucune session en cours
+	FILESELECT_SESSIONDETAILS_MAPUNAVAILABLE=		Le chapitre n'existe pas
+	FILESELECT_SESSIONDETAILS_ONGOINGSESSION=		Session en cours
+	FILESELECT_SESSIONDETAILS_FIRSTPLAYTHROUGH=		Chapitre jamais terminé
 	
 # Title Screen
 	MENU_TITLESCREEN_RESTART_VANILLA= Lancement du jeu non modifié
